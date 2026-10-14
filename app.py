@@ -3,21 +3,57 @@ import google.generativeai as genai
 import pandas as pd
 import os
 import json
+import base64
+import requests
 from PIL import Image
 
 # Konfigurasi halaman web Streamlit
 st.set_page_config(page_title="Aplikasi Scanner Nota AI", layout="centered")
 
 st.title("🧾 Aplikasi Scanner Nota Otomatis dengan AI")
-st.write("Unggah foto nota atau struk belanja Anda di bawah ini, dan AI akan merapikannya ke dalam tabel secara otomatis!")
+st.write("Unggah foto nota atau struk belanja Anda di bawah ini, dan AI akan merapikannya secara otomatis!")
 
-# Mengambil API Key dari Streamlit Secrets
+# Mengambil konfigurasi dari Streamlit Secrets
 API_KEY = st.secrets.get("GEMINI_API_KEY", "")
+GITHUB_TOKEN = st.secrets.get("GITHUB_TOKEN", "")  # Token Akses GitHub Anda
+GITHUB_REPO = st.secrets.get("GITHUB_REPO", "")    # Format: "username/namarepository"
+
 if not API_KEY:
     st.error("GEMINI_API_KEY belum disetel di menu Settings > Secrets Streamlit.")
     st.stop()
 
 genai.configure(api_key=API_KEY)
+
+def upload_foto_ke_github(uploaded_file, file_name):
+    """Fungsi otomatis mengunggah foto ke folder uploads di GitHub repository"""
+    if not GITHUB_TOKEN or not GITHUB_REPO:
+        return "Link Foto Tidak Tersedia (Token GitHub Belum Diset)"
+    
+    try:
+        url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/uploads/{file_name}"
+        headers = {
+            "Authorization": f"Bearer {GITHUB_TOKEN}",
+            "Accept": "application/vnd.github+json"
+        }
+        
+        # Encode file gambar ke Base64
+        bytes_data = uploaded_file.getvalue()
+        content_base64 = base64.b64encode(bytes_data).decode("utf-8")
+        
+        payload = {
+            "message": f"Upload foto nota otomatis: {file_name}",
+            "content": content_base64,
+            "branch": "main"
+        }
+        
+        response = requests.put(url, json=payload, headers=headers)
+        if response.status_code in [201, 200]:
+            # Mengembalikan link publik file di GitHub
+            return f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/uploads/{file_name}"
+        else:
+            return "Gagal Upload ke GitHub"
+    except Exception as e:
+        return f"Error: {str(e)}"
 
 def proses_nota_dengan_ai(uploaded_file):
     model = genai.GenerativeModel('gemini-3.8-flash')
@@ -35,30 +71,28 @@ def proses_nota_dengan_ai(uploaded_file):
     
     response = model.generate_content([image, prompt])
     teks_res = response.text.replace("```json", "").replace("```", "").strip()
-    
-    # Ubah hasil teks JSON ke dictionary Python
-    data_json = json.loads(teks_res)
-    
-    # Tambahkan nama file foto asli yang diunggah ke dalam data
-    data_json["nama_file_foto"] = uploaded_file.name
-    
-    return data_json
+    return json.loads(teks_res)
 
 # Tombol Upload Foto di Web
 uploaded_file = st.file_uploader("Pilih atau Ambil Foto Nota (JPG/PNG)", type=["jpg", "jpeg", "png"])
-
 nama_file_excel = "hasil_nota_ai.xlsx"
 
 if uploaded_file is not None:
     st.image(uploaded_file, caption="Foto Nota yang Diunggah", use_container_width=True)
     
     if st.button("🚀 Proses Nota Sekarang"):
-        with st.spinner("Sedang memproses nota dengan AI... Mohon tunggu..."):
+        with st.spinner("Sedang mengunggah foto dan memproses nota dengan AI... Mohon tunggu..."):
             try:
-                # 1. Ekstrak data via AI (termasuk nama file foto)
+                # 1. Upload foto ke GitHub untuk mendapatkan link permanen
+                file_url = upload_foto_ke_github(uploaded_file, uploaded_file.name)
+                
+                # 2. Ekstrak data via AI
                 data_dict = proses_nota_dengan_ai(uploaded_file)
                 
-                # 2. Format total_nota menjadi angka asli (float/int)
+                # 3. Masukkan link foto ke dalam data
+                data_dict["link_foto"] = file_url
+                
+                # 4. Format total_nota menjadi angka asli
                 raw_total = str(data_dict.get("total_nota", "0"))
                 bersih_angka = ''.join(c for c in raw_total if c.isdigit() or c in ['.', ','])
                 bersih_angka = bersih_angka.replace(',', '.')
@@ -69,7 +103,7 @@ if uploaded_file is not None:
                     
                 data_dict["waktu_scan_sistem"] = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
                 
-                # 3. Simpan ke file Excel
+                # 5. Simpan ke file Excel
                 df_baru = pd.DataFrame([data_dict])
                 if os.path.exists(nama_file_excel):
                     df_existing = pd.read_excel(nama_file_excel)
@@ -78,8 +112,7 @@ if uploaded_file is not None:
                 else:
                     df_baru.to_excel(nama_file_excel, index=False)
                 
-                st.success("Data berhasil diekstrak dan disimpan ke Excel beserta nama file fotonya!")
-                
+                st.success("Data berhasil diekstrak, foto tersimpan di cloud, dan data masuk ke Excel!")
                 st.subheader("Hasil Ekstraksi Terakhir:")
                 st.json(data_dict)
                 
