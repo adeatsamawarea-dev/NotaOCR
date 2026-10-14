@@ -35,11 +35,16 @@ def proses_nota_dengan_ai(uploaded_file):
     
     response = model.generate_content([image, prompt])
     teks_res = response.text.replace("```json", "").replace("```", "").strip()
-    return json.loads(teks_res)
+    
+    # Ubah hasil teks JSON ke dictionary Python
+    data_json = json.loads(teks_res)
+    
+    # Tambahkan nama file foto asli yang diunggah ke dalam data
+    data_json["nama_file_foto"] = uploaded_file.name
+    
+    return data_json
 
-# ==========================================
-# TOMBOL UPLOAD FOTO (Diletakkan di bagian utama)
-# ==========================================
+# Tombol Upload Foto di Web
 uploaded_file = st.file_uploader("Pilih atau Ambil Foto Nota (JPG/PNG)", type=["jpg", "jpeg", "png"])
 
 nama_file_excel = "hasil_nota_ai.xlsx"
@@ -50,7 +55,7 @@ if uploaded_file is not None:
     if st.button("🚀 Proses Nota Sekarang"):
         with st.spinner("Sedang memproses nota dengan AI... Mohon tunggu..."):
             try:
-                # 1. Ekstrak data via AI
+                # 1. Ekstrak data via AI (termasuk nama file foto)
                 data_dict = proses_nota_dengan_ai(uploaded_file)
                 
                 # 2. Format total_nota menjadi angka asli (float/int)
@@ -73,7 +78,7 @@ if uploaded_file is not None:
                 else:
                     df_baru.to_excel(nama_file_excel, index=False)
                 
-                st.success("Data berhasil diekstrak dan disimpan ke Excel!")
+                st.success("Data berhasil diekstrak dan disimpan ke Excel beserta nama file fotonya!")
                 
                 st.subheader("Hasil Ekstraksi Terakhir:")
                 st.json(data_dict)
