@@ -14,7 +14,8 @@ st.write("Unggah foto nota atau struk belanja Anda di bawah ini, dan AI akan mer
 # Masukkan API Key Anda di sini
 API_KEY = "AQ.Ab8RN6IsGxMKF-4paMPXuToD0Jm8zm4yDktu91ZGqscgdgubeA"
 
-def proses_nota_dengan_ai(uploaded_file):
+defdef proses_nota_dengan_ai(uploaded_file):
+    # Menggunakan parameter api_key secara eksplisit agar dikenali oleh library google-genai
     client = genai.Client(api_key=API_KEY)
     image = Image.open(uploaded_file)
     
@@ -28,7 +29,6 @@ def proses_nota_dengan_ai(uploaded_file):
     Berikan HANYA format JSON murni tanpa teks pengantar atau blok markdown lainnya.
     """
     
-    # Menggunakan model gemini-3.8-flash yang stabil
     response = client.models.generate_content(
         model="gemini-3.8-flash",
         contents=[image, prompt],
