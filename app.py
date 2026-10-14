@@ -1,5 +1,5 @@
 import streamlit as st
-from google import genai
+import google.generativeai as genai
 import pandas as pd
 import os
 import json
@@ -11,16 +11,19 @@ st.set_page_config(page_title="Aplikasi Scanner Nota AI", layout="centered")
 st.title("🧾 Aplikasi Scanner Nota Otomatis dengan AI")
 st.write("Unggah foto nota atau struk belanja Anda di bawah ini, dan AI akan merapikannya ke dalam tabel secara otomatis!")
 
-# Memuat API Key secara eksplisit dari Streamlit Secrets
+# Mengambil API Key secara aman dari Streamlit Secrets
 try:
     API_KEY = st.secrets["GEMINI_API_KEY"]
 except Exception as e:
     st.error("API Key belum diatur di Streamlit Secrets! Silakan atur terlebih dahulu di menu Settings > Secrets.")
     st.stop()
 
+# Konfigurasi kunci menggunakan library google-generativeai yang stabil
+genai.configure(api_key=API_KEY)
+
 def proses_nota_dengan_ai(uploaded_file):
-    # Memasukkan API Key secara langsung ke client google-genai
-    client = genai.Client(api_key=API_KEY)
+    # Menggunakan model stabil gemini-1.5-flash
+    model = genai.GenerativeModel('gemini-1.5-flash')
     image = Image.open(uploaded_file)
     
     prompt = """
@@ -33,11 +36,7 @@ def proses_nota_dengan_ai(uploaded_file):
     Berikan HANYA format JSON murni tanpa teks pengantar atau blok markdown lainnya.
     """
     
-    response = client.models.generate_content(
-        model="gemini-3.8-flash",
-        contents=[image, prompt],
-    )
-    
+    response = model.generate_content([image, prompt])
     teks_res = response.text.replace("```json", "").replace("```", "").strip()
     return json.loads(teks_res)
 
