@@ -1,5 +1,5 @@
 import streamlit as st
-from google import genai
+import google.generativeai as genai
 import pandas as pd
 import os
 import json
@@ -11,12 +11,13 @@ st.set_page_config(page_title="Aplikasi Scanner Nota AI", layout="centered")
 st.title("🧾 Aplikasi Scanner Nota Otomatis dengan AI")
 st.write("Unggah foto nota atau struk belanja Anda di bawah ini, dan AI akan merapikannya ke dalam tabel secara otomatis!")
 
-# Masukkan API Key Anda di sini
+# Konfigurasi API Key secara langsung
 API_KEY = "AQ.Ab8RN6IsGxMKF-4paMPXuToD0Jm8zm4yDktu91ZGqscgdgubeA"
+genai.configure(api_key=API_KEY)
 
 def proses_nota_dengan_ai(uploaded_file):
-    # Menggunakan parameter api_key secara eksplisit agar dikenali oleh library google-genai
-    client = genai.Client(api_key=API_KEY)
+    # Menggunakan model gemini-2.5-flash atau gemini-3.8-flash yang didukung google-generativeai
+    model = genai.GenerativeModel('gemini-2.5-flash')
     image = Image.open(uploaded_file)
     
     prompt = """
@@ -29,30 +30,23 @@ def proses_nota_dengan_ai(uploaded_file):
     Berikan HANYA format JSON murni tanpa teks pengantar atau blok markdown lainnya.
     """
     
-    response = client.models.generate_content(
-        model="gemini-3.8-flash",
-        contents=[image, prompt],
-    )
-    
+    response = model.generate_content([image, prompt])
     teks_res = response.text.replace("```json", "").replace("```", "").strip()
     return json.loads(teks_res)
 
 # Tombol Upload Foto di Web
 uploaded_file = st.file_uploader("Pilih atau Ambil Foto Nota (JPG/PNG)", type=["jpg", "jpeg", "png"])
-
 nama_file_excel = "hasil_nota_ai.xlsx"
 
 if uploaded_file is not None:
-    # Tampilkan preview gambar di web
     st.image(uploaded_file, caption="Foto Nota yang Diunggah", use_container_width=True)
     
     if st.button("🚀 Proses Nota Sekarang"):
         with st.spinner("Sedang memproses nota dengan AI... Mohon tunggu..."):
             try:
-                # 1. Ekstrak data via AI
                 data_dict = proses_nota_dengan_ai(uploaded_file)
                 
-                # 2. Format total_nota menjadi angka asli (float/int)
+                # Format total_nota menjadi angka asli
                 raw_total = str(data_dict.get("total_nota", "0"))
                 bersih_angka = ''.join(c for c in raw_total if c.isdigit() or c in ['.', ','])
                 bersih_angka = bersih_angka.replace(',', '.')
@@ -63,7 +57,7 @@ if uploaded_file is not None:
                     
                 data_dict["waktu_scan_sistem"] = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
                 
-                # 3. Simpan ke file Excel
+                # Simpan ke Excel
                 df_baru = pd.DataFrame([data_dict])
                 if os.path.exists(nama_file_excel):
                     df_existing = pd.read_excel(nama_file_excel)
@@ -73,22 +67,18 @@ if uploaded_file is not None:
                     df_baru.to_excel(nama_file_excel, index=False)
                 
                 st.success("Data berhasil diekstrak dan disimpan ke Excel!")
-                
-                # Tampilkan hasil dalam bentuk tabel di web
                 st.subheader("Hasil Ekstraksi Terakhir:")
                 st.json(data_dict)
                 
             except Exception as e:
                 st.error(f"Terjadi kesalahan: {e}")
 
-# Tombol untuk melihat atau mengunduh file Excel hasil rekap
 if os.path.exists(nama_file_excel):
     st.markdown("---")
     st.subheader("📊 Riwayat Rekap Excel")
     df_tampil = pd.read_excel(nama_file_excel)
     st.dataframe(df_tampil)
     
-    # Tombol Download Excel langsung dari web/HP
     with open(nama_file_excel, "rb") as f:
         st.download_button(
             label="📥 Download File Excel (`hasil_nota_ai.xlsx`)",
